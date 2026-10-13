@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 40rem;
+      padding: 2rem 1.25rem 4rem;
+      background: #fff;
+      color: #000;
+      font: 16px/1.4 Georgia, "Times New Roman", serif;
+    }
+    h1, h2 { font-weight: normal; margin: 0 0 0.75rem; }
+    h1 { border-bottom: 1px solid #000; padding-bottom: 0.5rem; }
+    section { margin-top: 2rem; }
+    label { display: block; margin: 0.7rem 0 0.2rem; }
+    input {
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #000;
+      background: #fff;
+      color: #000;
+      font: inherit;
+    }
+    button {
+      margin-top: 0.9rem;
+      margin-right: 0.4rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid #000;
+      background: #000;
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.plain { background: #fff; color: #000; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.45rem 0.3rem; border-bottom: 1px solid #000; vertical-align: top; }
+    .actions button { margin-top: 0; }
+    #status { min-height: 1.4rem; margin-top: 0.75rem; }
+    #detail { margin-top: 0.75rem; }
+    .empty { margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>Users</h1>
+  <p id="status" role="status"></p>
+
+  <section>
+    <h2>All users</h2>
+    <div id="list"></div>
+  </section>
+
+  <section>
+    <h2 id="form-title">Add user</h2>
+    <form id="user-form">
+      <input type="hidden" id="user-id">
+      <label for="name">Name</label>
+      <input id="name" name="name" required autocomplete="name">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required autocomplete="email">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required autocomplete="new-password">
+      <button type="submit" id="save">Add</button>
+      <button type="button" class="plain" id="cancel" hidden>Cancel</button>
+    </form>
+    <div id="detail"></div>
+  </section>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const listEl = document.getElementById("list");
+    const form = document.getElementById("user-form");
+    const formTitle = document.getElementById("form-title");
+    const idInput = document.getElementById("user-id");
+    const nameInput = document.getElementById("name");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const saveBtn = document.getElementById("save");
+    const cancelBtn = document.getElementById("cancel");
+    const detailEl = document.getElementById("detail");
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    async function request(path, options) {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      if (response.status === 204) return null;
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body.detail;
+        const message = typeof detail === "string"
+          ? detail
+          : "Request failed";
+        throw new Error(message);
+      }
+      return body;
+    }
+
+    function resetForm() {
+      form.reset();
+      idInput.value = "";
+      passwordInput.required = true;
+      formTitle.textContent = "Add user";
+      saveBtn.textContent = "Add";
+      cancelBtn.hidden = true;
+    }
+
+    function renderUsers(users) {
+      if (!users.length) {
+        listEl.innerHTML = '<p class="empty">No users yet.</p>';
+        return;
+      }
+      const rows = users.map((user) => `
+        <tr>
+          <td>${user.id}</td>
+          <td>${escapeHtml(user.name)}</td>
+          <td>${escapeHtml(user.email)}</td>
+          <td class="actions">
+            <button type="button" class="plain" data-view="${user.id}">View</button>
+            <button type="button" class="plain" data-edit="${user.id}">Edit</button>
+            <button type="button" data-delete="${user.id}">Delete</button>
+          </td>
+        </tr>
+      `).join("");
+      listEl.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>Id</th><th>Name</th><th>Email</th><th></th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function loadUsers() {
+      const users = await request("/users/");
+      renderUsers(users);
+    }
+
+    listEl.addEventListener("click", async (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      try {
+        if (button.dataset.view) {
+          const user = await request(`/users/${button.dataset.view}`);
+          detailEl.textContent = `${user.id} — ${user.name} — ${user.email}`;
+          setStatus("Loaded user.");
+        }
+        if (button.dataset.edit) {
+          const user = await request(`/users/${button.dataset.edit}`);
+          idInput.value = user.id;
+          nameInput.value = user.name;
+          emailInput.value = user.email;
+          passwordInput.value = "";
+          passwordInput.required = false;
+          formTitle.textContent = `Edit user ${user.id}`;
+          saveBtn.textContent = "Save";
+          cancelBtn.hidden = false;
+          detailEl.textContent = "";
+          nameInput.focus();
+        }
+        if (button.dataset.delete) {
+          await request(`/users/${button.dataset.delete}`, { method: "DELETE" });
+          if (idInput.value === button.dataset.delete) resetForm();
+          detailEl.textContent = "";
+          await loadUsers();
+          setStatus("User deleted.");
+        }
+      } catch (error) {
+        setStatus(error.message);
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const payload = {
+        name: nameInput.value.trim(),
+        email: emailInput.value.trim(),
+      };
+      if (passwordInput.value) payload.password = passwordInput.value;
+      try {
+        if (idInput.value) {
+          await request(`/users/${idInput.value}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+          setStatus("User updated.");
+        } else {
+          if (!payload.password) {
+            setStatus("Password is required for a new user.");
+            return;
+          }
+          await request("/users/", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          setStatus("User added.");
+        }
+        resetForm();
+        await loadUsers();
+      } catch (error) {
+        setStatus(error.message);
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      resetForm();
+      setStatus("");
+    });
+
+    loadUsers().catch((error) => setStatus(error.message));
+  </script>
+</body>
+</html>
