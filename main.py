@@ -3,8 +3,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 import uvicorn
+from src.models.users import User
 from src.routers.users import router
+from src.utils.db import base, engine
 
+base.metadata.create_all(bind=engine, tables=[User.__table__])
 app = FastAPI(title="User Management API")
 app.include_router(router)
 

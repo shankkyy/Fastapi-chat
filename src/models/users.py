@@ -1,4 +1,16 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
+from sqlalchemy import Column, Integer, String
+from src.utils.db import base
+
+
+class User(base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password = Column(String, nullable=False)
+
 
 class UserCreate(BaseModel):
     """Model for creating a user - includes sensitive password"""
@@ -9,6 +21,8 @@ class UserCreate(BaseModel):
 
 class UserResponse(BaseModel):
     """Model for API response - password is excluded"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     email: str
@@ -17,6 +31,6 @@ class UserResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     """Model for updating a user"""
-    name: str = None
-    email: EmailStr = None
-    password: str = None
+    name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
